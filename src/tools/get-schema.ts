@@ -6,17 +6,12 @@ interface GetSchemaArgs {
     data_access_id?: string;
 }
 
-interface SchemaEnv {
-    ORANGE_BOOK_DATA_DO?: unknown;
-    [key: string]: unknown;
-}
-
 interface ExtraWithEnvAndSession {
-    env?: SchemaEnv;
+    env?: Partial<Env>;
     sessionId?: string;
 }
 
-export function registerGetSchema(server: McpServer, env?: SchemaEnv) {
+export function registerGetSchema(server: McpServer, env?: Partial<Env>) {
     const handler = createGetSchemaHandler("ORANGE_BOOK_DATA_DO", "orange_book");
 
     server.registerTool(
@@ -34,7 +29,7 @@ export function registerGetSchema(server: McpServer, env?: SchemaEnv) {
         },
         async (args: GetSchemaArgs, extra) => {
             const typedExtra = extra as ExtraWithEnvAndSession;
-            const runtimeEnv: SchemaEnv = env ?? typedExtra.env ?? {};
+            const runtimeEnv = env ?? typedExtra.env ?? {};
             const handlerArgs: Record<string, unknown> = {
                 data_access_id: args.data_access_id,
             };

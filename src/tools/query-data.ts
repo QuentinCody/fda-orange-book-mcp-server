@@ -8,16 +8,11 @@ interface QueryDataArgs {
     limit?: number;
 }
 
-interface QueryEnv {
-    ORANGE_BOOK_DATA_DO?: unknown;
-    [key: string]: unknown;
-}
-
 interface ExtraWithEnv {
-    env?: QueryEnv;
+    env?: Partial<Env>;
 }
 
-export function registerQueryData(server: McpServer, env?: QueryEnv) {
+export function registerQueryData(server: McpServer, env?: Partial<Env>) {
     const handler = createQueryDataHandler("ORANGE_BOOK_DATA_DO", "orange_book");
 
     server.registerTool(
@@ -33,7 +28,7 @@ export function registerQueryData(server: McpServer, env?: QueryEnv) {
             },
         },
         async (args: QueryDataArgs, extra) => {
-            const runtimeEnv: QueryEnv = env ?? (extra as ExtraWithEnv).env ?? {};
+            const runtimeEnv = env ?? (extra as ExtraWithEnv).env ?? {};
             const handlerArgs: Record<string, unknown> = {
                 data_access_id: args.data_access_id,
                 sql: args.sql,

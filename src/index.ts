@@ -1,3 +1,4 @@
+// FDA Orange Book MCP Server
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerSearchProducts } from "./tools/search-products";
@@ -10,14 +11,14 @@ import { OrangeBookDataDO } from "./do";
 
 export { OrangeBookDataDO };
 
-export class MyMCP extends McpAgent {
+export class MyMCP extends McpAgent<Env> {
     server = new McpServer({
         name: "fda-orange-book",
         version: "0.1.0",
     });
 
     async init() {
-        const env = this.env as unknown as Record<string, unknown>;
+        const env = this.env;
         registerSearchProducts(this.server, env);
         registerSearchPatents(this.server, env);
         registerSearchExclusivity(this.server, env);

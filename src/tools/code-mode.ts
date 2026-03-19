@@ -27,12 +27,18 @@ function toRegisterable(server: McpServer): ToolRegisterable {
     };
 }
 
+/** Minimal shape required from the worker Env for Code Mode registration. */
+interface CodeModeEnv {
+    ORANGE_BOOK_DATA_DO: Pick<Env["ORANGE_BOOK_DATA_DO"], "get" | "idFromName">;
+    CODE_MODE_LOADER: Env["CODE_MODE_LOADER"];
+}
+
 export function registerCodeMode(
     server: McpServer,
-    env: Record<string, unknown>,
+    env: CodeModeEnv,
 ) {
-    const doNamespace = env.ORANGE_BOOK_DATA_DO as DurableObjectNamespace | undefined;
-    const loader = env.CODE_MODE_LOADER as WorkerLoader | undefined;
+    const doNamespace = env.ORANGE_BOOK_DATA_DO;
+    const loader = env.CODE_MODE_LOADER;
 
     if (!doNamespace || !loader) return;
 

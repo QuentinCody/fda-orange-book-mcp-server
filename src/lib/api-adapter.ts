@@ -1,6 +1,6 @@
 import type { ApiFetchFn } from "@bio-mcp/shared/codemode/catalog";
 import {
-    orangeBookFetch,
+    orangeBookFetchText,
     parseTildeDelimited,
     type OrangeBookFileType,
 } from "./http";
@@ -18,7 +18,7 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const dataCache = new Map<OrangeBookFileType, CacheEntry>();
 
 /**
- * Get cached data or fetch + parse from FDA.
+ * Get cached data or fetch + parse from FDA ZIP.
  */
 async function getCachedData(
     fileType: OrangeBookFileType,
@@ -28,20 +28,7 @@ async function getCachedData(
         return cached.data;
     }
 
-    const response = await orangeBookFetch(fileType);
-    if (!response.ok) {
-        let errorBody: string;
-        try {
-            errorBody = await response.text();
-        } catch {
-            errorBody = response.statusText;
-        }
-        throw new Error(
-            `FDA download failed for ${fileType}: HTTP ${response.status} - ${errorBody.slice(0, 300)}`,
-        );
-    }
-
-    const rawText = await response.text();
+    const rawText = await orangeBookFetchText(fileType);
     const data = parseTildeDelimited(rawText);
 
     dataCache.set(fileType, { data, fetchedAt: Date.now() });

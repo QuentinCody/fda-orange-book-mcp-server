@@ -26,11 +26,11 @@ interface StagingDO {
 }
 
 interface ExtraWithEnvAndSession {
-    env?: Record<string, unknown>;
+    env?: Partial<Env>;
     sessionId?: string;
 }
 
-function extractStagingDO(env: Record<string, unknown>): StagingDO | undefined {
+function extractStagingDO(env: Partial<Env>): StagingDO | undefined {
     const binding = env.ORANGE_BOOK_DATA_DO;
     if (
         binding &&
@@ -43,7 +43,7 @@ function extractStagingDO(env: Record<string, unknown>): StagingDO | undefined {
     return undefined;
 }
 
-export function registerSearchProducts(server: McpServer, env?: Record<string, unknown>) {
+export function registerSearchProducts(server: McpServer, env?: Partial<Env>) {
     server.registerTool(
         "orange_book_search_products",
         {

@@ -1,5 +1,6 @@
 import { restFetch } from "@bio-mcp/shared/http/rest-fetch";
 import type { RestFetchOptions } from "@bio-mcp/shared/http/rest-fetch";
+import { unzipSync } from "fflate";
 
 export interface OrangeBookFetchOptions
     extends Omit<RestFetchOptions, "retryOn"> {
@@ -7,40 +8,89 @@ export interface OrangeBookFetchOptions
 }
 
 /**
- * Direct download URLs for the individual Orange Book TXT data files.
- * These URLs serve the raw tilde-delimited text files.
+ * FDA Orange Book ZIP download URL.
+ * Contains products.txt, patent.txt, and exclusivity.txt (tilde-delimited).
  */
-export const ORANGE_BOOK_DOWNLOAD_URLS = {
-    products: "https://www.fda.gov/media/76860/download",
-    patents: "https://www.fda.gov/media/76861/download",
-    exclusivity: "https://www.fda.gov/media/76862/download",
-} as const;
+const ORANGE_BOOK_ZIP_URL = "https://www.fda.gov/media/76860/download";
 
-export type OrangeBookFileType = keyof typeof ORANGE_BOOK_DOWNLOAD_URLS;
+/** File names inside the Orange Book ZIP */
+const FILE_NAMES: Record<OrangeBookFileType, string> = {
+    products: "products.txt",
+    patents: "patent.txt",
+    exclusivity: "exclusivity.txt",
+};
+
+export type OrangeBookFileType = "products" | "patents" | "exclusivity";
+
+/** Cached extracted text files from the ZIP */
+let zipCache: { files: Map<string, string>; fetchedAt: number } | null = null;
+const ZIP_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
- * Fetch a raw Orange Book data file from the FDA website.
- * Returns the raw text content of the tilde-delimited TXT file.
+ * Fetch and cache all Orange Book data files from the FDA ZIP.
+ * Uses fflate for ZIP decompression (pure JS, Workers-compatible).
  */
-export async function orangeBookFetch(
-    fileType: OrangeBookFileType,
+async function fetchAndCacheZip(
     opts?: OrangeBookFetchOptions,
-): Promise<Response> {
-    const url = ORANGE_BOOK_DOWNLOAD_URLS[fileType];
-    const headers: Record<string, string> = {
-        Accept: "text/plain, text/csv, */*",
-        ...(opts?.headers ?? {}),
-    };
+): Promise<Map<string, string>> {
+    if (zipCache && Date.now() - zipCache.fetchedAt < ZIP_CACHE_TTL) {
+        return zipCache.files;
+    }
 
-    // Use restFetch for retry/timeout behavior, path is the full URL
-    return restFetch(url, "", undefined, {
+    const response = await restFetch(ORANGE_BOOK_ZIP_URL, "", undefined, {
         ...opts,
-        headers,
+        headers: {
+            Accept: "*/*",
+            ...(opts?.headers ?? {}),
+        },
         retryOn: [429, 500, 502, 503],
         retries: opts?.retries ?? 3,
         timeout: opts?.timeout ?? 60_000,
         userAgent: "fda-orange-book-mcp-server/1.0 (bio-mcp)",
     });
+
+    if (!response.ok) {
+        throw new Error(
+            `FDA Orange Book ZIP download failed: HTTP ${response.status}`,
+        );
+    }
+
+    const buffer = await response.arrayBuffer();
+    const zipData = new Uint8Array(buffer);
+    const unzipped = unzipSync(zipData);
+
+    const decoder = new TextDecoder("utf-8");
+    const files = new Map<string, string>();
+
+    for (const [path, data] of Object.entries(unzipped)) {
+        if (path.endsWith(".txt")) {
+            const baseName = path.split("/").pop()?.toLowerCase() ?? path.toLowerCase();
+            files.set(baseName, decoder.decode(data));
+        }
+    }
+
+    zipCache = { files, fetchedAt: Date.now() };
+    return files;
+}
+
+/**
+ * Fetch a specific Orange Book data file (extracts from cached ZIP).
+ * Returns the raw text content of the tilde-delimited TXT file.
+ */
+export async function orangeBookFetchText(
+    fileType: OrangeBookFileType,
+    opts?: OrangeBookFetchOptions,
+): Promise<string> {
+    const files = await fetchAndCacheZip(opts);
+    const targetName = FILE_NAMES[fileType];
+    const text = files.get(targetName);
+    if (!text) {
+        const available = Array.from(files.keys()).join(", ");
+        throw new Error(
+            `File "${targetName}" not found in Orange Book ZIP. Available: ${available}`,
+        );
+    }
+    return text;
 }
 
 /**
@@ -54,7 +104,6 @@ export function parseTildeDelimited(
     const lines = rawText.trim().split("\n");
     if (lines.length < 2) return [];
 
-    // First line is headers
     const headers = lines[0].split("~").map((h) => h.trim());
 
     const records: Record<string, string>[] = [];
