@@ -1,4 +1,5 @@
-// FDA Orange Book MCP Server
+// FDA Orange Book MCP Server — Code Mode only (hand-built tools removed)
+// Tools: orange_book_search, orange_book_execute, query_data, get_schema
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerQueryData } from "./tools/query-data";
