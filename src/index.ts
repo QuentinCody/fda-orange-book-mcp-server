@@ -1,9 +1,6 @@
 // FDA Orange Book MCP Server
 import { McpAgent } from "agents/mcp";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerSearchProducts } from "./tools/search-products";
-import { registerSearchPatents } from "./tools/search-patents";
-import { registerSearchExclusivity } from "./tools/search-exclusivity";
 import { registerQueryData } from "./tools/query-data";
 import { registerGetSchema } from "./tools/get-schema";
 import { registerCodeMode } from "./tools/code-mode";
@@ -19,9 +16,6 @@ export class MyMCP extends McpAgent<Env> {
 
     async init() {
         const env = this.env;
-        registerSearchProducts(this.server, env);
-        registerSearchPatents(this.server, env);
-        registerSearchExclusivity(this.server, env);
         registerQueryData(this.server, env);
         registerGetSchema(this.server, env);
         registerCodeMode(this.server, env);
