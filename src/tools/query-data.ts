@@ -12,7 +12,7 @@ interface ExtraWithEnv {
     env?: Partial<Env>;
 }
 
-export function registerQueryData(server: McpServer, env?: Partial<Env>) {
+export function registerQueryData(server: McpServer, env?: Partial<Env>): void {
     const handler = createQueryDataHandler("ORANGE_BOOK_DATA_DO", "orange_book");
 
     server.registerTool(

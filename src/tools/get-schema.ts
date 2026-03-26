@@ -11,7 +11,7 @@ interface ExtraWithEnvAndSession {
     sessionId?: string;
 }
 
-export function registerGetSchema(server: McpServer, env?: Partial<Env>) {
+export function registerGetSchema(server: McpServer, env?: Partial<Env>): void {
     const handler = createGetSchemaHandler("ORANGE_BOOK_DATA_DO", "orange_book");
 
     server.registerTool(

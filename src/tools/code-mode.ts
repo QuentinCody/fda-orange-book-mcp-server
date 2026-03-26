@@ -36,7 +36,7 @@ interface CodeModeEnv {
 export function registerCodeMode(
     server: McpServer,
     env: CodeModeEnv,
-) {
+): void {
     const doNamespace = env.ORANGE_BOOK_DATA_DO;
     const loader = env.CODE_MODE_LOADER;
 
