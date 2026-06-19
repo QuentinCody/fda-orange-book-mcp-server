@@ -53,6 +53,8 @@ export function registerCodeMode(
 
     const executeTool = createExecuteTool({
         prefix: "orange_book",
+        // Verifiable provenance: orange_book_execute results carry a _meta.citation.
+        source: { id: "orange_book", name: "FDA Orange Book", url: "https://www.accessdata.fda.gov/scripts/cder/ob", license: "U.S. Public Domain" },
         catalog: orangeBookCatalog,
         apiFetch,
         doNamespace,

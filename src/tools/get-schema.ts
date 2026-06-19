@@ -33,7 +33,10 @@ export function registerGetSchema(server: McpServer, env?: Partial<Env>): void {
             const handlerArgs: Record<string, unknown> = {
                 data_access_id: args.data_access_id,
             };
-            return handler(handlerArgs, runtimeEnv, typedExtra.sessionId);
+            // Pass the full extra (not just sessionId) so the handler resolves the
+            // same request scope the execute/staging path registers under
+            // (getRequestScope: _meta.app.chatId / mcp-chat-id header, then sessionId).
+            return handler(handlerArgs, runtimeEnv, extra as Record<string, unknown>);
         },
     );
 }
