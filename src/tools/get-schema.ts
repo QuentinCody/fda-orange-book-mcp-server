@@ -35,7 +35,7 @@ export function registerGetSchema(server: McpServer, env?: Partial<Env>): void {
             };
             // Pass the full extra (not just sessionId) so the handler resolves the
             // same request scope the execute/staging path registers under
-            // (getRequestScope: _meta.app.chatId / mcp-chat-id header, then sessionId).
+            // (getRequestScope: _meta["dev.quentincody.bio/chatId"] / mcp-chat-id header, then sessionId).
             return handler(handlerArgs, runtimeEnv, extra as Record<string, unknown>);
         },
     );

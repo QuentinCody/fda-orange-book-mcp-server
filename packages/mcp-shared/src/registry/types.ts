@@ -3,7 +3,9 @@ import type { z } from "zod";
 /**
  * SQL tagged template function type used throughout the platform.
  */
-export type SqlTaggedTemplate = <T = Record<string, string | number | boolean | null>>(
+export type SqlTaggedTemplate = <
+	T = Record<string, string | number | boolean | null>,
+>(
 	strings: TemplateStringsArray,
 	...values: (string | number | boolean | null)[]
 ) => T[];
@@ -22,7 +24,7 @@ export interface ToolContext {
 	 *
 	 * Historically populated from the MCP transport sessionId; the
 	 * execute tools now resolve it via `getRequestScope(extra)`, which
-	 * prefers `_meta.app.chatId` and the `mcp-chat-id` header before
+	 * prefers `_meta["dev.quentincody.bio/chatId"]` and the `mcp-chat-id` header before
 	 * falling back to the transport session. The field name is kept
 	 * for back-compat with all downstream proxy tools (api-proxy,
 	 * stage-proxy, graphql-proxy, sparql-proxy) that already read
@@ -47,7 +49,10 @@ export interface ToolEntry {
 	name: string;
 	description: string;
 	schema: Record<string, z.ZodType>;
-	handler: (input: Record<string, unknown>, ctx: ToolContext) => Promise<unknown>;
+	handler: (
+		input: Record<string, unknown>,
+		ctx: ToolContext,
+	) => Promise<unknown>;
 	/** If true, tool is callable from V8 isolates but not exposed via MCP tools/list or type generation. */
 	hidden?: boolean;
 }
