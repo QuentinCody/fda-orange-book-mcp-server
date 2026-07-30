@@ -10,7 +10,7 @@ import { OrangeBookDataDO } from "./do";
 
 export { OrangeBookDataDO };
 
-export class MyMCP extends StatelessMcpWorker<Env> {
+export class FdaOrangeBookMCP extends StatelessMcpWorker<Env> {
     server = new McpServer({
         name: "fda-orange-book",
         version: "0.1.0",
@@ -35,7 +35,7 @@ export default {
         }
 
         if (url.pathname === "/mcp") {
-            return MyMCP.serve("/mcp").fetch(request, env, ctx);
+            return FdaOrangeBookMCP.serve("/mcp").fetch(request, env, ctx);
         }
 
         return new Response("Not found", { status: 404 });
