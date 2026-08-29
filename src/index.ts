@@ -34,6 +34,13 @@ export default {
             return buildHealthResponse("fda-orange-book");
         }
 
+        if (url.pathname === "/readyz") {
+            // Deep check: builds the MCP server the way a real request does, so a
+            // factory that throws is a 503 here instead of a green /health over a
+            // server that 500s every MCP call.
+            return FdaOrangeBookMCP.readiness(env, "fda-orange-book");
+        }
+
         if (url.pathname === "/mcp") {
             return FdaOrangeBookMCP.serve("/mcp").fetch(request, env, ctx);
         }
