@@ -1,124 +1,59 @@
 import type { ApiFetchFn } from "@bio-mcp/shared/codemode/catalog";
-import {
-    orangeBookFetchText,
-    parseTildeDelimited,
-    type OrangeBookFileType,
-} from "./http";
+import { fetchOrangeBookApi } from "./openfda";
+import { orangeBookSnapshot } from "./http";
+import { bulkError, FILE_NAMES, type OrangeBookFileType } from "./bulk-table";
 
-/** In-memory cache entry with TTL */
-interface CacheEntry {
-    data: Record<string, string>[];
-    fetchedAt: number;
+function pageInteger(value: unknown, fallback: number, min: number, max: number): number {
+  if (value === undefined) return fallback;
+  const number = typeof value === "string" && /^\d+$/.test(value) ? Number(value) : value;
+  if (typeof number !== "number" || !Number.isSafeInteger(number) || number < min || number > max) bulkError("Invalid pagination integer");
+  return number;
 }
 
-/** 24-hour cache TTL in milliseconds */
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+function validatePin(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)) bulkError("Invalid snapshot_sha256");
+  return value;
+}
 
-/** In-memory cache for parsed Orange Book data files */
-const dataCache = new Map<OrangeBookFileType, CacheEntry>();
-
-/**
- * Get cached data or fetch + parse from FDA ZIP.
- */
-async function getCachedData(
-    fileType: OrangeBookFileType,
-): Promise<Record<string, string>[]> {
-    const cached = dataCache.get(fileType);
-    if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-        return cached.data;
+/** Exact read-only routes; all bulk queries use one validated archive snapshot. */
+export function createOrangeBookApiFetch(apiKey?: string): ApiFetchFn {
+  return async request => {
+    if (request.method !== "GET" || request.body !== undefined) throw new Error("Orange Book supports GET queries only, without a body.");
+    const path = request.path.replace(/^\//, "");
+    const params = request.params ?? {};
+    if (path === "drug/orangebook.json") return fetchOrangeBookApi(params, apiKey);
+    const kind = Object.keys(FILE_NAMES).find(key => key === path) as OrangeBookFileType | undefined;
+    if (!kind && path !== "bulk/manifest" && path !== "bulk/file") bulkError("Unknown endpoint; use /products, /patents, /exclusivity, /bulk/manifest, /bulk/file or /drug/orangebook.json");
+    const pin = validatePin(params.snapshot_sha256);
+    const offset = kind ? pageInteger(params.offset, 0, 0, Number.MAX_SAFE_INTEGER) : 0;
+    const limit = kind ? pageInteger(params.limit, 500, 1, 10_000) : 0;
+    if (!kind) {
+      const allowed = path === "bulk/manifest" ? ["refresh", "snapshot_sha256"] : ["file", "snapshot_sha256"];
+      if (Object.keys(params).some(key => !allowed.includes(key))) bulkError("Unknown bulk metadata parameter");
+      if (path === "bulk/manifest" && params.refresh !== undefined && typeof params.refresh !== "boolean") bulkError("refresh must be boolean");
+      if (path === "bulk/file" && (typeof params.file !== "string" || !Object.keys(FILE_NAMES).includes(params.file))) bulkError("file must be products, patents or exclusivity");
     }
-
-    const rawText = await orangeBookFetchText(fileType);
-    const data = parseTildeDelimited(rawText);
-
-    dataCache.set(fileType, { data, fetchedAt: Date.now() });
-    return data;
+    const snapshot = await orangeBookSnapshot({ refresh: path === "bulk/manifest" && params.refresh === true });
+    if (pin !== undefined && snapshot.metadata.snapshot_sha256 !== pin) bulkError("Snapshot changed; restart the complete query with a fresh manifest");
+    const metadata = structuredClone(snapshot.metadata);
+    if (path === "bulk/manifest") return { status: 200, data: { _orange_book: metadata } };
+    if (path === "bulk/file") {
+      const file = params.file as OrangeBookFileType;
+      return { status: 200, data: { raw_text: snapshot.files[file].text, file: metadata.files[file], _orange_book: metadata } };
+    }
+    return snapshotPage(kind!, params, snapshot, metadata, offset, limit);
+  };
 }
 
-/**
- * Case-insensitive substring match filter.
- */
-function matchesFilter(
-    records: Record<string, string>[],
-    params: Record<string, unknown>,
-): Record<string, string>[] {
-    const filters = Object.entries(params).filter(
-        ([key, val]) =>
-            key !== "limit" && key !== "offset" && val !== undefined && val !== "",
-    );
-
-    if (filters.length === 0) return records;
-
-    return records.filter((record) =>
-        filters.every(([key, val]) => {
-            const fieldValue = record[key];
-            if (fieldValue === undefined) return false;
-            return fieldValue
-                .toLowerCase()
-                .includes(String(val).toLowerCase());
-        }),
-    );
-}
-
-/**
- * Apply limit and offset to results.
- */
-function paginate(
-    records: Record<string, string>[],
-    params: Record<string, unknown>,
-): Record<string, string>[] {
-    const offset = Number(params.offset) || 0;
-    const limit = Number(params.limit) || 500;
-    return records.slice(offset, offset + limit);
-}
-
-/**
- * Create an ApiFetchFn for FDA Orange Book data.
- *
- * Routes:
- *   GET /products   - Search approved drug products
- *   GET /patents    - Search patent data
- *   GET /exclusivity - Search exclusivity data
- *
- * All query parameters are used as case-insensitive substring filters
- * against the corresponding field names. Special params: limit, offset.
- */
-export function createOrangeBookApiFetch(): ApiFetchFn {
-    return async (request) => {
-        const path = request.path.replace(/^\/+/, "").split("?")[0];
-        const params = request.params ?? {};
-
-        let fileType: OrangeBookFileType;
-
-        if (path === "products" || path.startsWith("products/")) {
-            fileType = "products";
-        } else if (path === "patents" || path.startsWith("patents/")) {
-            fileType = "patents";
-        } else if (
-            path === "exclusivity" ||
-            path.startsWith("exclusivity/")
-        ) {
-            fileType = "exclusivity";
-        } else {
-            throw new Error(
-                `Unknown Orange Book endpoint: /${path}. Valid endpoints: /products, /patents, /exclusivity`,
-            );
-        }
-
-        const allData = await getCachedData(fileType);
-        const filtered = matchesFilter(allData, params);
-        const results = paginate(filtered, params);
-
-        return {
-            status: 200,
-            data: {
-                total_unfiltered: allData.length,
-                total_filtered: filtered.length,
-                returned: results.length,
-                offset: Number(params.offset) || 0,
-                limit: Number(params.limit) || 500,
-                results,
-            },
-        };
-    };
+function snapshotPage(kind: OrangeBookFileType, params: Record<string, unknown>, snapshot: Awaited<ReturnType<typeof orangeBookSnapshot>>, metadata: Awaited<ReturnType<typeof orangeBookSnapshot>>["metadata"], offset: number, limit: number) {
+  const file = kind!;
+  const filters = Object.entries(params).filter(([key]) => !["offset", "limit", "snapshot_sha256"].includes(key));
+  for (const [field, value] of filters) {
+    if (!metadata.files[file].columns.includes(field) || (value !== undefined && typeof value !== "string")) bulkError("Unknown filter column or non-string filter value");
+  }
+  const records = snapshot.files[file].records;
+  const filtered = records.filter(row => filters.every(([field, value]) => value === undefined || row[field].toLowerCase().includes((value as string).toLowerCase())));
+  const results = filtered.slice(offset, offset + limit).map(row => ({ ...row }));
+  return { status: 200, data: { total_unfiltered: records.length, total_filtered: filtered.length, returned: results.length, offset, limit, results, _orange_book: metadata } };
 }

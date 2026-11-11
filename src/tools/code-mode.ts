@@ -3,6 +3,7 @@ import { createSearchTool } from "@bio-mcp/shared/codemode/search-tool";
 import { createExecuteTool } from "@bio-mcp/shared/codemode/execute-tool";
 import { orangeBookCatalog } from "../spec/catalog";
 import { createOrangeBookApiFetch } from "../lib/api-adapter";
+import { orangeBookResponse } from "../lib/tool-result";
 
 /**
  * Interface matching what createSearchTool/createExecuteTool .register() expects.
@@ -19,16 +20,22 @@ interface ToolRegisterable {
  * (...args: unknown[]) => void.  We use Function.prototype.apply to forward
  * the variadic call so TypeScript doesn't need to reconcile the overloads.
  */
-function toRegisterable(server: McpServer): ToolRegisterable {
+function toRegisterable(server: McpServer, env: CodeModeEnv): ToolRegisterable {
     return {
         tool(...args: unknown[]) {
-            Function.prototype.apply.call(server.tool, server, args);
+            const [name, ...rest] = args;
+            const handler = rest.pop() as (input: unknown, extra: unknown) => Promise<unknown>;
+            for (const alias of [String(name), `mcp_${String(name)}`]) {
+                Function.prototype.apply.call(server.tool, server, [alias, ...rest,
+                    (input: unknown, extra: unknown) => orangeBookResponse(() => handler(input, extra), env, alias, input, extra)]);
+            }
         },
     };
 }
 
 /** Minimal shape required from the worker Env for Code Mode registration. */
 interface CodeModeEnv {
+    OPENFDA_API_KEY?: string;
     ORANGE_BOOK_DATA_DO: Pick<Env["ORANGE_BOOK_DATA_DO"], "get" | "idFromName">;
     CODE_MODE_LOADER: Env["CODE_MODE_LOADER"];
 }
@@ -42,8 +49,8 @@ export function registerCodeMode(
 
     if (!doNamespace || !loader) return;
 
-    const apiFetch = createOrangeBookApiFetch();
-    const registerable = toRegisterable(server);
+    const apiFetch = createOrangeBookApiFetch(env.OPENFDA_API_KEY);
+    const registerable = toRegisterable(server, env);
 
     const searchTool = createSearchTool({
         prefix: "orange_book",

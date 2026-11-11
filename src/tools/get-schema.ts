@@ -1,6 +1,7 @@
 import type { McpServer } from "@bio-mcp/shared/mcp";
 import { z } from "zod";
 import { createGetSchemaHandler } from "@bio-mcp/shared/staging/utils";
+import { orangeBookResponse } from "../lib/tool-result";
 
 interface GetSchemaArgs {
     data_access_id?: string;
@@ -14,8 +15,8 @@ interface ExtraWithEnvAndSession {
 export function registerGetSchema(server: McpServer, env?: Partial<Env>): void {
     const handler = createGetSchemaHandler("ORANGE_BOOK_DATA_DO", "orange_book");
 
-    server.registerTool(
-        "orange_book_get_schema",
+    for (const name of ["orange_book_get_schema", "mcp_orange_book_get_schema"]) server.registerTool(
+        name,
         {
             title: "Get Staged Data Schema",
             description:
@@ -36,7 +37,7 @@ export function registerGetSchema(server: McpServer, env?: Partial<Env>): void {
             // Pass the full extra (not just sessionId) so the handler resolves the
             // same request scope the execute/staging path registers under
             // (getRequestScope: _meta["dev.quentincody.bio/chatId"] / mcp-chat-id header, then sessionId).
-            return handler(handlerArgs, runtimeEnv, extra as Record<string, unknown>);
+            return orangeBookResponse(() => handler(handlerArgs, runtimeEnv, extra as Record<string, unknown>), runtimeEnv, name, args, extra);
         },
     );
 }
